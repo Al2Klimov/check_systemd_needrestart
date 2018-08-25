@@ -5,7 +5,9 @@ import (
 	"html"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,6 +30,22 @@ type nonConfFilesScan struct {
 type mTimesDiff struct {
 	service string
 	diffs   map[string]map[string]time.Duration
+}
+
+type orderedFile struct {
+	path string
+	diff time.Duration
+}
+
+type orderedPackage struct {
+	name  string
+	files []orderedFile
+}
+
+type orderedService struct {
+	name     string
+	packages []orderedPackage
+	pending  uint64
 }
 
 var firstWord = regexp.MustCompile(`\A(\S+)`)
@@ -176,32 +194,7 @@ func checkSystemdNeedrestart() map[string]error {
 		os.Exit(0)
 	}
 
-	builder := strings.Builder{}
-
-	for service, packageDiffs := range serviceDiffs {
-		builder.Write(h1[0])
-		builder.Write([]byte(html.EscapeString(service)))
-		builder.Write(h1[1])
-
-		for packag, fileDiffs := range packageDiffs {
-			builder.Write(h2[0])
-			builder.Write([]byte(html.EscapeString(packag)))
-			builder.Write(h2[1])
-			builder.Write(table[0])
-
-			for file, diff := range fileDiffs {
-				builder.Write(tr[0])
-				builder.Write([]byte(html.EscapeString(file)))
-				builder.Write(tr[1])
-				builder.Write([]byte(html.EscapeString(diff.String())))
-				builder.Write(tr[2])
-			}
-
-			builder.Write(table[1])
-		}
-	}
-
-	if _, errFP := fmt.Print(builder.String()); errFP != nil {
+	if _, errFP := fmt.Print(assembleCriticalOutput(orderCriticalOutput(serviceDiffs))); errFP != nil {
 		os.Exit(3)
 	}
 
@@ -251,4 +244,114 @@ func diffMTimes(service string, activeSince time.Time, deps map[string]struct{},
 	}
 
 	ch <- mTimesDiff{service: service, diffs: diffs}
+}
+
+func orderCriticalOutput(serviceDiffs map[string]map[string]map[string]time.Duration) []orderedService {
+	services := make([]orderedService, len(serviceDiffs))
+	serviceIdx := 0
+	pending := uint64(len(services))
+	chDone := make(chan struct{}, 1)
+
+	for service, packageDiffs := range serviceDiffs {
+		packages := make([]orderedPackage, len(packageDiffs))
+		packageIdx := 0
+		serviceAddr := &services[serviceIdx]
+		*serviceAddr = orderedService{name: service, packages: packages, pending: uint64(len(packages))}
+
+		for packag, fileDiffs := range packageDiffs {
+			files := make([]orderedFile, len(fileDiffs))
+			fileIdx := 0
+			packages[packageIdx] = orderedPackage{name: packag, files: files}
+
+			for file, diff := range fileDiffs {
+				files[fileIdx] = orderedFile{path: file, diff: diff}
+				fileIdx++
+			}
+
+			go orderTree(files, packages, serviceAddr, &pending, services, chDone)
+
+			packageIdx++
+		}
+
+		serviceIdx++
+	}
+
+	<-chDone
+	close(chDone)
+
+	return services
+}
+
+func orderTree(files []orderedFile, packages []orderedPackage, service *orderedService, pending *uint64, services []orderedService, chDone chan struct{}) {
+	sort.Slice(files, func(i, j int) bool {
+		a := files[i]
+		b := files[j]
+
+		if a.diff == b.diff {
+			return a.path < b.path
+		}
+
+		return a.diff > b.diff
+	})
+
+	if atomic.AddUint64(&service.pending, ^uint64(0)) == 0 {
+		sort.Slice(packages, func(i, j int) bool {
+			a := packages[i]
+			b := packages[j]
+			aDiff := a.files[0].diff
+			bDiff := b.files[0].diff
+
+			if aDiff == bDiff {
+				return a.name < b.name
+			}
+
+			return aDiff > bDiff
+		})
+
+		if atomic.AddUint64(pending, ^uint64(0)) == 0 {
+			sort.Slice(services, func(i, j int) bool {
+				a := services[i]
+				b := services[j]
+				aDiff := a.packages[0].files[0].diff
+				bDiff := b.packages[0].files[0].diff
+
+				if aDiff == bDiff {
+					return a.name < b.name
+				}
+
+				return aDiff > bDiff
+			})
+
+			chDone <- struct{}{}
+		}
+	}
+}
+
+func assembleCriticalOutput(services []orderedService) string {
+	builder := strings.Builder{}
+
+	for _, service := range services {
+		builder.Write(h1[0])
+		builder.Write([]byte(html.EscapeString(service.name)))
+		builder.Write(h1[1])
+
+		for _, packag := range service.packages {
+			builder.Write(h2[0])
+			builder.Write([]byte(html.EscapeString(packag.name)))
+			builder.Write(h2[1])
+			builder.Write(table[0])
+
+			for _, file := range packag.files {
+				builder.Write(tr[0])
+				builder.Write([]byte(html.EscapeString(file.path)))
+				builder.Write(tr[1])
+				builder.Write([]byte(html.EscapeString(file.diff.String())))
+				builder.Write(tr[2])
+			}
+
+			builder.Write(table[1])
+		}
+	}
+
+	return builder.String()
 }
