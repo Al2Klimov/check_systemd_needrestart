@@ -193,16 +193,19 @@ func checkSystemdNeedrestart() map[string]error {
 			label: "mtime_diff_min",
 			uom:   "us",
 			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+			min:   optionalNumber{isSet: true, value: -math.SmallestNonzeroFloat64},
 		},
 		perfdata{
 			label: "mtime_diff_avg",
 			uom:   "us",
 			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+			min:   optionalNumber{isSet: true, value: -math.SmallestNonzeroFloat64},
 		},
 		perfdata{
 			label: "mtime_diff_max",
 			uom:   "us",
 			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+			min:   optionalNumber{isSet: true, value: -math.SmallestNonzeroFloat64},
 		},
 	}
 
@@ -256,9 +259,6 @@ func checkSystemdNeedrestart() map[string]error {
 	packagesUpgraded = nil
 
 	perfdat[1].value = float64(len(serviceDiffs))
-	perfdat[4].value = mTimeDiffMin / float64(time.Microsecond)
-	perfdat[5].value = mTimeDiffSum / float64(mTimeDiffCount) / float64(time.Microsecond)
-	perfdat[6].value = mTimeDiffMax / float64(time.Microsecond)
 
 	var status int
 	var output string
@@ -266,9 +266,17 @@ func checkSystemdNeedrestart() map[string]error {
 	if len(serviceDiffs) > 0 {
 		status = 2
 		output = assembleCriticalOutput(orderCriticalOutput(serviceDiffs))
+
+		perfdat[4].value = mTimeDiffMin / float64(time.Microsecond)
+		perfdat[5].value = mTimeDiffSum / float64(mTimeDiffCount) / float64(time.Microsecond)
+		perfdat[6].value = mTimeDiffMax / float64(time.Microsecond)
 	} else {
 		status = 0
 		output = "<p>No service has not been restarted since some of its parts have been upgraded.</p>"
+
+		perfdat[4].value = -math.SmallestNonzeroFloat64
+		perfdat[5].value = -math.SmallestNonzeroFloat64
+		perfdat[6].value = -math.SmallestNonzeroFloat64
 	}
 
 	if _, errFP := fmt.Print(output + perfdat.String()); errFP != nil {
