@@ -80,7 +80,14 @@ func showServices(ch chan servicesInfo) {
 }
 
 func showService(service string, ch chan systemctlShowResult) {
-	cmd, rawProperties, errSSS := system("systemctl", "show", "-p", "ActiveState", "-p", "ExecMainStartTimestamp", "-p", "FragmentPath", service+".service")
+	cmd, rawProperties, errSSS := system(
+		"systemctl", "show",
+		"-p", "ActiveState",
+		"-p", "SubState",
+		"-p", "ExecMainStartTimestamp",
+		"-p", "FragmentPath",
+		service+".service",
+	)
 	if errSSS != nil {
 		ch <- systemctlShowResult{cmd: cmd, err: errSSS}
 		return
@@ -95,7 +102,7 @@ func showService(service string, ch chan systemctlShowResult) {
 	}
 
 	var activeSince time.Time
-	if properties["ActiveState"] == "active" {
+	if properties["ActiveState"] == "active" && properties["SubState"] == "running" {
 		var errTP error
 		activeSince, errTP = time.Parse("Mon 2006-01-02 15:04:05 MST", properties["ExecMainStartTimestamp"])
 
