@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -182,6 +183,49 @@ func checkSystemdNeedrestart() map[string]error {
 
 	close(chNonConfFilesScan)
 	chNonConfFilesScan = nil
+
+	perfdat := perfdataCollection{
+		perfdata{
+			label: "services_active",
+			value: float64(len(services.services)),
+			min:   optionalNumber{isSet: true, value: 0},
+			max:   optionalNumber{isSet: true, value: float64(services.servicesTotal)},
+		},
+		perfdata{
+			label: "services_notrestarted",
+			crit:  optionalThreshold{isSet: true, inverted: true, start: 1, end: posInf},
+			min:   optionalNumber{isSet: true, value: 0},
+			max:   optionalNumber{isSet: true, value: float64(services.servicesTotal)},
+		},
+		perfdata{
+			label: "packages_active",
+			value: float64(len(packagesHandled)),
+			min:   optionalNumber{isSet: true, value: 0},
+			max:   optionalNumber{isSet: true, value: float64(len(packages.packages))},
+		},
+		perfdata{
+			label: "packages_upgraded",
+			crit:  optionalThreshold{isSet: true, inverted: true, start: 1, end: posInf},
+			min:   optionalNumber{isSet: true, value: 0},
+			max:   optionalNumber{isSet: true, value: float64(len(packages.packages))},
+		},
+		perfdata{
+			label: "mtime_diff_min",
+			uom:   "us",
+			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+		},
+		perfdata{
+			label: "mtime_diff_avg",
+			uom:   "us",
+			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+		},
+		perfdata{
+			label: "mtime_diff_max",
+			uom:   "us",
+			crit:  optionalThreshold{isSet: true, inverted: true, start: 0, end: posInf},
+		},
+	}
+
 	packagesHandled = nil
 
 	if len(errs) > 0 {
@@ -199,16 +243,42 @@ func checkSystemdNeedrestart() map[string]error {
 	mTimes = nil
 
 	serviceDiffs := map[string]map[string]map[string]time.Duration{}
+	packagesUpgraded := map[string]struct{}{}
+	mTimeDiffMin := float64(posInf)
+	mTimeDiffMax := float64(negInf)
+	mTimeDiffSum := float64(0)
+	mTimeDiffCount := uint64(0)
 
 	for pending := len(serviceDeps); pending > 0; pending-- {
 		if diffs := <-chMTimesDiff; len(diffs.diffs) > 0 {
 			serviceDiffs[diffs.service] = diffs.diffs
+
+			for packag, files := range diffs.diffs {
+				packagesUpgraded[packag] = struct{}{}
+
+				for _, diff := range files {
+					fDiff := float64(diff)
+					mTimeDiffMin = math.Min(mTimeDiffMin, fDiff)
+					mTimeDiffMax = math.Max(mTimeDiffMax, fDiff)
+					mTimeDiffSum += fDiff
+					mTimeDiffCount++
+				}
+			}
 		}
 	}
 
 	close(chMTimesDiff)
 	chMTimesDiff = nil
 	serviceDeps = nil
+
+	perfdat[3].value = float64(len(packagesUpgraded))
+
+	packagesUpgraded = nil
+
+	perfdat[1].value = float64(len(serviceDiffs))
+	perfdat[4].value = mTimeDiffMin / float64(time.Microsecond)
+	perfdat[5].value = mTimeDiffSum / float64(mTimeDiffCount) / float64(time.Microsecond)
+	perfdat[6].value = mTimeDiffMax / float64(time.Microsecond)
 
 	var status int
 	var output string
@@ -221,7 +291,7 @@ func checkSystemdNeedrestart() map[string]error {
 		output = "<p>No service has not been restarted since some of its parts have been upgraded.</p>"
 	}
 
-	if _, errFP := fmt.Print(output); errFP != nil {
+	if _, errFP := fmt.Print(output + perfdat.String()); errFP != nil {
 		status = 3
 	}
 

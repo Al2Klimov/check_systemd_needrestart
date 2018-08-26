@@ -12,8 +12,9 @@ type serviceInfo struct {
 }
 
 type servicesInfo struct {
-	services map[string]serviceInfo
-	errs     map[string]error
+	services      map[string]serviceInfo
+	servicesTotal uint64
+	errs          map[string]error
 }
 
 type systemctlShowResult struct {
@@ -35,7 +36,7 @@ func showServices(ch chan servicesInfo) {
 	}
 
 	chSystemctlShow := make(chan systemctlShowResult, 64)
-	var pending uint64 = 0
+	var servicesTotal uint64 = 0
 
 	for _, line := range bytes.Split(unitFiles, lineBreak)[1:] {
 		line = bytes.Trim(line, " \t\r\n")
@@ -47,7 +48,7 @@ func showServices(ch chan servicesInfo) {
 		if match1 := firstWord.FindSubmatch(line); match1 != nil {
 			if match2 := serviceUnit.FindSubmatch(match1[1]); match2 != nil {
 				go showService(string(match2[1]), chSystemctlShow)
-				pending++
+				servicesTotal++
 			}
 		}
 	}
@@ -58,7 +59,7 @@ func showServices(ch chan servicesInfo) {
 	services := map[string]serviceInfo{}
 	errSSS := map[string]error{}
 
-	for ; pending > 0; pending-- {
+	for pending := servicesTotal; pending > 0; pending-- {
 		if result = <-chSystemctlShow; result.err == nil {
 			if result.activeSince != (time.Time{}) {
 				services[result.service] = serviceInfo{activeSince: result.activeSince, fragmentPath: result.fragmentPath}
@@ -75,7 +76,7 @@ func showServices(ch chan servicesInfo) {
 		return
 	}
 
-	ch <- servicesInfo{services: services, errs: nil}
+	ch <- servicesInfo{services: services, servicesTotal: servicesTotal, errs: nil}
 }
 
 func showService(service string, ch chan systemctlShowResult) {
