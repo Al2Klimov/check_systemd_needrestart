@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -51,13 +52,32 @@ type orderedService struct {
 var firstWord = regexp.MustCompile(`\A(\S+)`)
 var ignoredFile = regexp.MustCompile(`\A/(?:dev|etc|run|tmp|var|usr/share/(?:doc|man|locale))/`)
 var lineBreak = []byte("\n")
-var h1 = [2][]byte{[]byte("<p><b>Service: "), []byte("</b></p>")}
-var h2 = [2][]byte{[]byte("<p>Package: "), []byte("</p>")}
-var tr = [3][]byte{[]byte("<tr><td>"), []byte("</td><td>"), []byte("</td></tr>")}
 
-var table = [2][]byte{
-	[]byte("<table><thead><tr><th>File</th><th>MTime - service start</th></tr></thead><tbody>"),
-	[]byte("</tbody></table>"),
+var shortOutput = struct {
+	table [2][]byte
+	tr    [3][]byte
+}{
+	table: [2][]byte{
+		[]byte("<p><b>Some services have not been restarted since some of their parts have been upgraded:</b></p>" +
+			"<table><thead><tr><th>Service</th><th>Packages</th><th>Upgrade - service start</th></tr></thead><tbody>"),
+		[]byte("</tbody></table>\n\n"),
+	},
+	tr: [3][]byte{[]byte("<tr><td>"), []byte("</td><td>"), []byte("</td></tr>")},
+}
+
+var longOutput = struct {
+	h1    [2][]byte
+	h2    [2][]byte
+	table [2][]byte
+	tr    [3][]byte
+}{
+	h1: [2][]byte{[]byte("<p><b>Service: "), []byte("</b></p>")},
+	h2: [2][]byte{[]byte("<p>Package: "), []byte("</p>")},
+	table: [2][]byte{
+		[]byte("<table><thead><tr><th>File</th><th>MTime - service start</th></tr></thead><tbody>"),
+		[]byte("</tbody></table>"),
+	},
+	tr: [3][]byte{[]byte("<tr><td>"), []byte("</td><td>"), []byte("</td></tr>")},
 }
 
 func main() {
@@ -190,15 +210,22 @@ func checkSystemdNeedrestart() map[string]error {
 	chMTimesDiff = nil
 	serviceDeps = nil
 
-	if len(serviceDiffs) < 1 {
-		os.Exit(0)
+	var status int
+	var output string
+
+	if len(serviceDiffs) > 0 {
+		status = 2
+		output = assembleCriticalOutput(orderCriticalOutput(serviceDiffs))
+	} else {
+		status = 0
+		output = "<p>No service has not been restarted since some of its parts have been upgraded.</p>"
 	}
 
-	if _, errFP := fmt.Print(assembleCriticalOutput(orderCriticalOutput(serviceDiffs))); errFP != nil {
-		os.Exit(3)
+	if _, errFP := fmt.Print(output); errFP != nil {
+		status = 3
 	}
 
-	os.Exit(2)
+	os.Exit(status)
 
 	return nil
 }
@@ -330,26 +357,40 @@ func orderTree(files []orderedFile, packages []orderedPackage, service *orderedS
 func assembleCriticalOutput(services []orderedService) string {
 	builder := strings.Builder{}
 
+	builder.Write(shortOutput.table[0])
+
 	for _, service := range services {
-		builder.Write(h1[0])
+		builder.Write(shortOutput.tr[0])
 		builder.Write([]byte(html.EscapeString(service.name)))
-		builder.Write(h1[1])
+		builder.Write(shortOutput.tr[1])
+		builder.Write([]byte(strconv.FormatInt(int64(len(service.packages)), 10)))
+		builder.Write(shortOutput.tr[1])
+		builder.Write([]byte(html.EscapeString(service.packages[0].files[0].diff.String())))
+		builder.Write(shortOutput.tr[2])
+	}
+
+	builder.Write(shortOutput.table[1])
+
+	for _, service := range services {
+		builder.Write(longOutput.h1[0])
+		builder.Write([]byte(html.EscapeString(service.name)))
+		builder.Write(longOutput.h1[1])
 
 		for _, packag := range service.packages {
-			builder.Write(h2[0])
+			builder.Write(longOutput.h2[0])
 			builder.Write([]byte(html.EscapeString(packag.name)))
-			builder.Write(h2[1])
-			builder.Write(table[0])
+			builder.Write(longOutput.h2[1])
+			builder.Write(longOutput.table[0])
 
 			for _, file := range packag.files {
-				builder.Write(tr[0])
+				builder.Write(longOutput.tr[0])
 				builder.Write([]byte(html.EscapeString(file.path)))
-				builder.Write(tr[1])
+				builder.Write(longOutput.tr[1])
 				builder.Write([]byte(html.EscapeString(file.diff.String())))
-				builder.Write(tr[2])
+				builder.Write(longOutput.tr[2])
 			}
 
-			builder.Write(table[1])
+			builder.Write(longOutput.table[1])
 		}
 	}
 
