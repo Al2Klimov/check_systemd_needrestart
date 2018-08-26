@@ -294,7 +294,7 @@ func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan nonConfFilesScan
 
 	for file := range nonConfFiles {
 		if ignoredFile.FindSubmatch([]byte(file)) == nil {
-			if info, errStat := os.Stat(file); errStat == nil {
+			if info, errStat := os.Lstat(file); errStat == nil {
 				if !info.IsDir() {
 					mTimes[file] = info.ModTime()
 				}
