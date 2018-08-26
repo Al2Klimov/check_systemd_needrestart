@@ -15,6 +15,7 @@ import (
 
 type packageInfo struct {
 	deps         map[string]struct{}
+	aliases      map[string]struct{}
 	nonConfFiles map[string]struct{}
 }
 
@@ -95,7 +96,7 @@ func checkSystemdNeedrestart() map[string]error {
 	chPackagesInfo := make(chan packagesInfo, 1)
 	chServicesInfo := make(chan servicesInfo, 1)
 
-	go dpkgShowPackages(chPackagesInfo)
+	go showPackages(chPackagesInfo)
 	go showServices(chServicesInfo)
 
 	packages := <-chPackagesInfo
@@ -133,34 +134,13 @@ func checkSystemdNeedrestart() map[string]error {
 
 	for name, service := range services.services {
 		if packag, hasPackage := packages.nonConfFiles[service.fragmentPath]; hasPackage {
-			if _, handled := packagesHandled[packag]; !handled {
-				go scanNonConfFiles(packages.packages[packag].nonConfFiles, chNonConfFilesScan)
-				packagesHandled[packag] = struct{}{}
-			}
-
-			deps := map[string]struct{}{packag: {}}
+			deps := packages.packages[packag].deps
 			serviceDeps[name] = deps
 
-			for {
-				depsLen := len(deps)
-
-				for packag2 := range deps {
-					for dep := range packages.packages[packag2].deps {
-						if metaData, hasMetaData := packages.packages[dep]; hasMetaData {
-							if _, hasDep := deps[dep]; !hasDep {
-								deps[dep] = struct{}{}
-
-								if _, handled := packagesHandled[dep]; !handled {
-									go scanNonConfFiles(metaData.nonConfFiles, chNonConfFilesScan)
-									packagesHandled[dep] = struct{}{}
-								}
-							}
-						}
-					}
-				}
-
-				if len(deps) == depsLen {
-					break
+			for dep := range deps {
+				if _, handled := packagesHandled[dep]; !handled {
+					go scanNonConfFiles(packages.packages[dep].nonConfFiles, chNonConfFilesScan)
+					packagesHandled[dep] = struct{}{}
 				}
 			}
 		}

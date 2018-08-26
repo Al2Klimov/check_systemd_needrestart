@@ -6,22 +6,34 @@ import (
 )
 
 type dpkgShowPackageResult struct {
-	packag string
-	files  map[string]struct{}
-	deps   map[string]struct{}
-	cmd    string
-	err    error
+	packag  string
+	files   map[string]struct{}
+	deps    map[string]struct{}
+	aliases map[string]struct{}
+	cmd     string
+	err     error
 }
 
 var dpkgProperty = regexp.MustCompile(`\A([^=>]+)([=>])(.*)\z`)
 var anyWord = regexp.MustCompile(`\S+`)
 var commaSpace = []byte(", ")
 
-func dpkgShowPackages(ch chan packagesInfo) {
-	cmd, rawPackages, errDQ := system("dpkg-query", "-W", "-f", `Package=${Package}\nStatus=${Status}\nDepends=${Depends}\nPre-Depends=${Pre-Depends}\nConffiles>\n${Conffiles}\n`, "*")
+func dpkgShowPackages() (packagesInfo, map[string]error) {
+	cmd, rawPackages, errDQ := system(
+		"dpkg-query", "-W",
+		"-f", `Package=${Package}
+Status=${Status}
+Depends=${Depends}
+Pre-Depends=${Pre-Depends}
+Provides=${Provides}
+Replaces=${Replaces}
+Conffiles>
+${Conffiles}
+`,
+		"*",
+	)
 	if errDQ != nil {
-		ch <- packagesInfo{errs: map[string]error{cmd: errDQ}}
-		return
+		return packagesInfo{}, map[string]error{cmd: errDQ}
 	}
 
 	packages := map[string]map[string][][]byte{}
@@ -53,7 +65,16 @@ func dpkgShowPackages(ch chan packagesInfo) {
 							attrs := packages[packag]
 
 							if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-								go dpkgShowPackage(packag, attrs["Conffiles"], attrs["Depends"], attrs["Pre-Depends"], chDpkgList)
+								go dpkgShowPackage(
+									packag,
+									attrs["Conffiles"],
+									attrs["Depends"],
+									attrs["Pre-Depends"],
+									attrs["Provides"],
+									attrs["Replaces"],
+									chDpkgList,
+								)
+
 								pending++
 							}
 						}
@@ -78,7 +99,16 @@ func dpkgShowPackages(ch chan packagesInfo) {
 		attrs := packages[packag]
 
 		if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-			go dpkgShowPackage(packag, attrs["Conffiles"], attrs["Depends"], attrs["Pre-Depends"], chDpkgList)
+			go dpkgShowPackage(
+				packag,
+				attrs["Conffiles"],
+				attrs["Depends"],
+				attrs["Pre-Depends"],
+				attrs["Provides"],
+				attrs["Replaces"],
+				chDpkgList,
+			)
+
 			pending++
 		}
 	}
@@ -89,7 +119,11 @@ func dpkgShowPackages(ch chan packagesInfo) {
 
 	for ; pending > 0; pending-- {
 		if files := <-chDpkgList; files.err == nil {
-			packageMetaData[files.packag] = packageInfo{deps: files.deps, nonConfFiles: files.files}
+			packageMetaData[files.packag] = packageInfo{
+				deps:         files.deps,
+				aliases:      files.aliases,
+				nonConfFiles: files.files,
+			}
 
 			for file := range files.files {
 				nonConfFiles[file] = files.packag
@@ -102,11 +136,10 @@ func dpkgShowPackages(ch chan packagesInfo) {
 	close(chDpkgList)
 
 	if len(errs) > 0 {
-		ch <- packagesInfo{errs: errs}
-		return
+		return packagesInfo{}, errs
 	}
 
-	ch <- packagesInfo{packages: packageMetaData, nonConfFiles: nonConfFiles, errs: nil}
+	return packagesInfo{packages: packageMetaData, nonConfFiles: nonConfFiles}, nil
 }
 
 func dpkgParseStatus(status [][]byte) (result map[string]struct{}) {
@@ -123,9 +156,25 @@ func dpkgParseStatus(status [][]byte) (result map[string]struct{}) {
 	return
 }
 
-func dpkgShowPackage(packag string, conffiles [][]byte, depends [][]byte, preDepends [][]byte, ch chan dpkgShowPackageResult) {
+func dpkgShowPackage(
+	packag string,
+	conffiles [][]byte,
+	depends [][]byte,
+	preDepends [][]byte,
+	provides [][]byte,
+	replaces [][]byte,
+	ch chan dpkgShowPackageResult,
+) {
+	chEffectiveDeps := make(chan map[string]struct{}, 1)
+	chEffectiveAliases := make(chan map[string]struct{}, 1)
+
+	go dpkgParsePackagesLists(chEffectiveDeps, depends, preDepends)
+	go dpkgParsePackagesLists(chEffectiveAliases, provides, replaces)
+
 	cmd, rawFiles, errDL := system("dpkg", "-L", packag)
 	if errDL != nil {
+		<-chEffectiveDeps
+		<-chEffectiveAliases
 		ch <- dpkgShowPackageResult{cmd: cmd, err: errDL}
 		return
 	}
@@ -145,17 +194,28 @@ func dpkgShowPackage(packag string, conffiles [][]byte, depends [][]byte, preDep
 		delete(files, string(file))
 	}
 
-	effectiveDeps := map[string]struct{}{}
+	ch <- dpkgShowPackageResult{
+		packag:  packag,
+		files:   files,
+		deps:    <-chEffectiveDeps,
+		aliases: <-chEffectiveAliases,
+		cmd:     cmd,
+		err:     nil,
+	}
+}
 
-	for _, depsList := range [][][]byte{depends, preDepends} {
-		for _, deps := range depsList {
-			for _, dep := range bytes.Split(deps, commaSpace) {
-				if match := firstWord.FindSubmatch(dep); match != nil {
-					effectiveDeps[string(match[1])] = struct{}{}
+func dpkgParsePackagesLists(ch chan map[string]struct{}, lists ...[][]byte) {
+	result := map[string]struct{}{}
+
+	for _, list := range lists {
+		for _, packages := range list {
+			for _, packag := range bytes.Split(packages, commaSpace) {
+				if match := firstWord.FindSubmatch(packag); match != nil {
+					result[string(match[1])] = struct{}{}
 				}
 			}
 		}
 	}
 
-	ch <- dpkgShowPackageResult{packag: packag, files: files, deps: effectiveDeps, cmd: cmd, err: nil}
+	ch <- result
 }
