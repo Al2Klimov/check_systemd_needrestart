@@ -25,11 +25,11 @@ type systemctlShowResult struct {
 	err          error
 }
 
-var serviceUnit = regexp.MustCompile(`\A(.*[^@])\.service\z`)
+var serviceUnit = regexp.MustCompile(`\A(.+)\.service\z`)
 var serviceProperty = regexp.MustCompile(`\A([^=]+)=(.*)\z`)
 
 func showServices(ch chan servicesInfo) {
-	cmd, unitFiles, errLUF := system("systemctl", "list-unit-files")
+	cmd, unitFiles, errLUF := system("systemctl", "list-units")
 	if errLUF != nil {
 		ch <- servicesInfo{errs: map[string]error{cmd: errLUF}}
 		return
