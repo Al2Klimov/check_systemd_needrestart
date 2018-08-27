@@ -1,7 +1,11 @@
+//go:generate go run $GOPATH/src/github.com/Al2Klimov/go-gen-source-repos/main.go github.com/Al2Klimov/check_systemd_needrestart
+
 package main
 
 import (
 	"fmt"
+	_ "github.com/Al2Klimov/go-gen-source-repos"
+	"golang.org/x/crypto/ssh/terminal"
 	"html"
 	"math"
 	"os"
@@ -83,6 +87,15 @@ var longOutput = struct {
 }
 
 func main() {
+	if terminal.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Printf(
+			"For the terms of use, the source code and the authors\nsee the projects this program is assembled from:\n\n  %s\n",
+			strings.Join(GithubcomAl2klimovGo_gen_source_repos, "\n  "),
+		)
+
+		return
+	}
+
 	if errsCSNR := checkSystemdNeedrestart(); errsCSNR != nil {
 		for context, err := range errsCSNR {
 			fmt.Printf("%s: %s\n", context, err.Error())
