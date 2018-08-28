@@ -1,0 +1,19 @@
+language: go
+
+go:
+  - "1.10.x"
+  - "1.x"
+  - master
+
+script:
+  - .travis-ci/compile.sh
+
+deploy:
+  provider: releases
+  api_key:
+    secure: goxHjutO5guTKW8u76nDWnNIC6f1rugRzTtMZhWhJ2p8DmipzFCHfgYe+3tx7mXxEQc/mCW/U/oyqcMdEeSqj8MAYVWHy0E68UKAZWfMUi6hz0Z7V50hyteG9rGf8odWo6rKMBh/OmpAajNl1qAmwX6rbBFMClBoHRiZ+jg+8fuCSrzm2GBUNSkWAl5k0uU3PcZIYe54urHc0fTHbbp322faDgCgLDBqL3vwAsuZPnRlbJzsKq3DCsArN5CFPlkbHBcM9Hb+jifZsSZOUseM0YLc2eIIz7+Y8KHfU6NrPJl3rcVpUvwV6606jiLnVhCPos0AOM2Usq5r4A8BePSyv8idM6dTCZ0uLgwXMTxz1d4JKIZsPOyKWAMKqvNlI3ODcA0zkrycSB1YO5CMlCc7HLerZmr6wHKobU7Y5V4DOiEwcMdyqufB1P65xf5JPdO/yc7RfSIQGul2Xa04HSb6yhHXj5A0IlGI5qXfu96soI2nBz2BTp+Xdh9n7AtVu6+rpSmDBC6LvoatSIXtNkiv/NJXb/d+1jmLZTnVobyaMfgYAdffeaw1zvlbAy/s3iuAaInQQJ61J9wRRjCCVEMy5zkFlOWR0pIY5ve15RXch5Y7W/nBasSBIoq2993rkWlFVOTw4+w483ETCKEHSarZj3vRUOk+TUpIbrruQl9FUCU=
+  file_glob: true
+  file: check_systemd_needrestart.linux-*
+  skip_cleanup: true
+  on:
+    tags: true
