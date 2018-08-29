@@ -56,7 +56,8 @@ type orderedService struct {
 }
 
 var firstWord = regexp.MustCompile(`\A(\S+)`)
-var ignoredFile = regexp.MustCompile(`\A/(?:dev|etc|run|tmp|var|usr/share/(?:doc|man|locale))/`)
+var ignoredFile = regexp.MustCompile(`\A/usr/share/(?:doc|man|locale)/`)
+var toleratedFile = regexp.MustCompile(`\A/(?:dev|etc|run|tmp|var)/`)
 var lineBreak = []byte("\n")
 
 var shortOutput = struct {
@@ -311,7 +312,7 @@ func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan nonConfFilesScan
 				if !info.IsDir() {
 					mTimes[file] = info.ModTime()
 				}
-			} else if !os.IsNotExist(errStat) {
+			} else if !(os.IsNotExist(errStat) || (os.IsPermission(errStat) && toleratedFile.MatchString(file))) {
 				errs[formatCmd("stat", file)] = errStat
 			}
 		}
