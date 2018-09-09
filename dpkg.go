@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"regexp"
+	"strings"
 )
 
 type dpkgShowPackageResult struct {
@@ -22,6 +23,7 @@ func dpkgShowPackages() (packagesInfo, map[string]error) {
 	cmd, rawPackages, errDQ := system(
 		"dpkg-query", "-W",
 		"-f", `Package=${Package}
+Architecture=${Architecture}
 Status=${Status}
 Depends=${Depends}
 Pre-Depends=${Pre-Depends}
@@ -36,64 +38,60 @@ ${Conffiles}
 		return packagesInfo{}, map[string]error{cmd: errDQ}
 	}
 
-	packages := map[string]map[string][][]byte{}
 	var pending uint64 = 0
 	chDpkgList := make(chan dpkgShowPackageResult, 64)
-	packag := ""
+	attrs := map[string][][]byte{}
 	attr := ""
-	readingList := false
+	var values [][]byte = nil
 
 	for _, line := range bytes.Split(rawPackages, lineBreak) {
 		if len(line) > 0 {
-			if readingList {
+			if values != nil {
 				if line[0] == ' ' {
 					if match := firstWord.FindSubmatch(line[1:]); match != nil {
-						attrs := packages[packag]
-						attrs[attr] = append(attrs[attr], match[1])
+						values = append(values, match[1])
 					}
 				} else {
-					readingList = false
+					attrs[attr] = values
+					values = nil
 				}
 			}
 
-			if !readingList {
+			if values == nil {
 				if match := dpkgProperty.FindSubmatch(line); match != nil {
 					attr = string(match[1])
 
 					if attr == "Package" {
-						if packag != "" {
-							attrs := packages[packag]
-
+						if _, hasPackage := attrs["Package"]; hasPackage {
 							if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-								go dpkgShowPackage(packag, attrs, chDpkgList)
+								go dpkgShowPackage(attrs, chDpkgList)
 								pending++
 							}
 						}
 
-						packag = string(match[3])
-						packages[packag] = make(map[string][][]byte, 4)
-					} else if packag != "" {
-						switch match[2][0] {
-						case '=':
-							packages[packag][attr] = [][]byte{match[3]}
-						case '>':
-							packages[packag][attr] = [][]byte{}
-							readingList = true
-						}
+						attrs = make(map[string][][]byte, 8)
+					}
+
+					switch match[2][0] {
+					case '=':
+						attrs[attr] = [][]byte{match[3]}
+					case '>':
+						values = [][]byte{}
 					}
 				}
 			}
 		}
 	}
 
-	if packag != "" {
-		attrs := packages[packag]
-
+	if _, hasPackage := attrs["Package"]; hasPackage {
 		if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-			go dpkgShowPackage(packag, attrs, chDpkgList)
+			go dpkgShowPackage(attrs, chDpkgList)
 			pending++
 		}
 	}
+
+	attrs = nil
+	values = nil
 
 	packageMetaData := make(map[string]packageInfo, pending)
 	nonConfFiles := map[string]string{}
@@ -138,12 +136,16 @@ func dpkgParseStatus(status [][]byte) (result map[string]struct{}) {
 	return
 }
 
-func dpkgShowPackage(packag string, attrs map[string][][]byte, ch chan dpkgShowPackageResult) {
+func dpkgShowPackage(attrs map[string][][]byte, ch chan dpkgShowPackageResult) {
+	arch := dpkgExtractStringAttr(attrs, "Architecture")
+
 	chEffectiveDeps := make(chan map[string]struct{}, 1)
 	chEffectiveAliases := make(chan map[string]struct{}, 1)
 
-	go dpkgParsePackagesLists(chEffectiveDeps, attrs["Depends"], attrs["Pre-Depends"])
-	go dpkgParsePackagesLists(chEffectiveAliases, attrs["Provides"], attrs["Replaces"])
+	go dpkgParsePackagesLists(chEffectiveDeps, [2][][]byte{attrs["Depends"], attrs["Pre-Depends"]}, []string{arch, "all"})
+	go dpkgParsePackagesLists(chEffectiveAliases, [2][][]byte{attrs["Provides"], attrs["Replaces"]}, []string{arch})
+
+	packag := dpkgExtractStringAttr(attrs, "Package") + ":" + arch
 
 	cmd, rawFiles, errDL := system("dpkg", "-L", packag)
 	if errDL != nil {
@@ -178,14 +180,28 @@ func dpkgShowPackage(packag string, attrs map[string][][]byte, ch chan dpkgShowP
 	}
 }
 
-func dpkgParsePackagesLists(ch chan map[string]struct{}, lists ...[][]byte) {
+func dpkgExtractStringAttr(attrs map[string][][]byte, attr string) string {
+	if values := attrs[attr]; len(values) > 0 {
+		return string(values[0])
+	}
+
+	return ""
+}
+
+func dpkgParsePackagesLists(ch chan map[string]struct{}, lists [2][][]byte, archs []string) {
 	result := map[string]struct{}{}
 
 	for _, list := range lists {
 		for _, packages := range list {
 			for _, packag := range bytes.Split(packages, commaSpace) {
 				if match := firstWord.FindSubmatch(packag); match != nil {
-					result[string(match[1])] = struct{}{}
+					if packag := string(match[1]); strings.Contains(packag, ":") {
+						result[packag] = struct{}{}
+					} else {
+						for _, arch := range archs {
+							result[packag+":"+arch] = struct{}{}
+						}
+					}
 				}
 			}
 		}
