@@ -65,16 +65,7 @@ ${Conffiles}
 							attrs := packages[packag]
 
 							if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-								go dpkgShowPackage(
-									packag,
-									attrs["Conffiles"],
-									attrs["Depends"],
-									attrs["Pre-Depends"],
-									attrs["Provides"],
-									attrs["Replaces"],
-									chDpkgList,
-								)
-
+								go dpkgShowPackage(packag, attrs, chDpkgList)
 								pending++
 							}
 						}
@@ -99,16 +90,7 @@ ${Conffiles}
 		attrs := packages[packag]
 
 		if _, installed := dpkgParseStatus(attrs["Status"])["installed"]; installed {
-			go dpkgShowPackage(
-				packag,
-				attrs["Conffiles"],
-				attrs["Depends"],
-				attrs["Pre-Depends"],
-				attrs["Provides"],
-				attrs["Replaces"],
-				chDpkgList,
-			)
-
+			go dpkgShowPackage(packag, attrs, chDpkgList)
 			pending++
 		}
 	}
@@ -156,20 +138,12 @@ func dpkgParseStatus(status [][]byte) (result map[string]struct{}) {
 	return
 }
 
-func dpkgShowPackage(
-	packag string,
-	conffiles [][]byte,
-	depends [][]byte,
-	preDepends [][]byte,
-	provides [][]byte,
-	replaces [][]byte,
-	ch chan dpkgShowPackageResult,
-) {
+func dpkgShowPackage(packag string, attrs map[string][][]byte, ch chan dpkgShowPackageResult) {
 	chEffectiveDeps := make(chan map[string]struct{}, 1)
 	chEffectiveAliases := make(chan map[string]struct{}, 1)
 
-	go dpkgParsePackagesLists(chEffectiveDeps, depends, preDepends)
-	go dpkgParsePackagesLists(chEffectiveAliases, provides, replaces)
+	go dpkgParsePackagesLists(chEffectiveDeps, attrs["Depends"], attrs["Pre-Depends"])
+	go dpkgParsePackagesLists(chEffectiveAliases, attrs["Provides"], attrs["Replaces"])
 
 	cmd, rawFiles, errDL := system("dpkg", "-L", packag)
 	if errDL != nil {
@@ -190,7 +164,7 @@ func dpkgShowPackage(
 
 	delete(files, "/.")
 
-	for _, file := range conffiles {
+	for _, file := range attrs["Conffiles"] {
 		delete(files, string(file))
 	}
 
