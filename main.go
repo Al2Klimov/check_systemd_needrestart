@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	_ "github.com/Al2Klimov/go-gen-source-repos"
+	pp "github.com/Al2Klimov/go-pretty-print"
 	"golang.org/x/crypto/ssh/terminal"
 	"html"
 	"math"
@@ -437,7 +438,7 @@ func assembleCriticalOutput(services []orderedService) string {
 		builder.Write(shortOutput.tr[1])
 		builder.Write([]byte(strconv.FormatInt(int64(len(service.packages)), 10)))
 		builder.Write(shortOutput.tr[1])
-		builder.Write([]byte(html.EscapeString(service.packages[0].files[0].diff.String())))
+		builder.Write([]byte(html.EscapeString(pp.Duration(service.packages[0].files[0].diff, 2))))
 		builder.Write(shortOutput.tr[2])
 	}
 
@@ -458,7 +459,7 @@ func assembleCriticalOutput(services []orderedService) string {
 				builder.Write(longOutput.tr[0])
 				builder.Write([]byte(html.EscapeString(file.path)))
 				builder.Write(longOutput.tr[1])
-				builder.Write([]byte(html.EscapeString(file.diff.String())))
+				builder.Write([]byte(html.EscapeString(pp.Duration(file.diff, 2))))
 				builder.Write(longOutput.tr[2])
 			}
 
