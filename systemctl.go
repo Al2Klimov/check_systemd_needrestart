@@ -2,19 +2,31 @@ package main
 
 import (
 	"bytes"
+	linux "github.com/Al2Klimov/go-linux-apis"
+	"os"
 	"regexp"
 	"time"
 )
 
 type serviceInfo struct {
-	activeSince  time.Time
-	fragmentPath string
+	activeSince time.Time
+	anyFile     string
 }
 
 type servicesInfo struct {
 	services      map[string]serviceInfo
 	servicesTotal uint64
 	errs          map[string]error
+}
+
+type systemdInfo struct {
+	serviceInfo
+	errs map[string]error
+}
+
+type initExe struct {
+	path string
+	errs map[string]error
 }
 
 type systemctlShowResult struct {
@@ -35,8 +47,11 @@ func showServices(ch chan servicesInfo) {
 		return
 	}
 
+	chSystemdInfo := make(chan systemdInfo, 1)
 	chSystemctlShow := make(chan systemctlShowResult, 64)
 	var servicesTotal uint64 = 0
+
+	go getSystemdInfo(chSystemdInfo)
 
 	for _, line := range bytes.Split(unitFiles, lineBreak)[1:] {
 		line = bytes.Trim(line, " \t\r\n")
@@ -62,7 +77,7 @@ func showServices(ch chan servicesInfo) {
 	for pending := servicesTotal; pending > 0; pending-- {
 		if result = <-chSystemctlShow; result.err == nil {
 			if result.activeSince != (time.Time{}) {
-				services[result.service] = serviceInfo{activeSince: result.activeSince, fragmentPath: result.fragmentPath}
+				services[result.service] = serviceInfo{activeSince: result.activeSince, anyFile: result.fragmentPath}
 			}
 		} else {
 			errSSS[result.cmd] = result.err
@@ -71,12 +86,55 @@ func showServices(ch chan servicesInfo) {
 
 	close(chSystemctlShow)
 
+	if syIn := <-chSystemdInfo; syIn.errs == nil {
+		services["systemd"] = syIn.serviceInfo
+	} else {
+		for c, e := range syIn.errs {
+			errSSS[c] = e
+		}
+	}
+
 	if len(errSSS) > 0 {
 		ch <- servicesInfo{errs: errSSS}
 		return
 	}
 
 	ch <- servicesInfo{services: services, servicesTotal: servicesTotal, errs: nil}
+}
+
+func getSystemdInfo(ch chan systemdInfo) {
+	chInitExe := make(chan initExe, 1)
+	getInitExe(chInitExe)
+
+	uptime, errGUT := linux.GetUptime()
+	now := time.Now()
+	ie := <-chInitExe
+
+	errs := map[string]error{}
+
+	if ie.errs != nil {
+		for c, e := range ie.errs {
+			errs[c] = e
+		}
+	}
+
+	if errGUT != nil {
+		errs["cat /proc/uptime"] = errGUT
+	}
+
+	if len(errs) > 0 {
+		ch <- systemdInfo{errs: errs}
+	} else {
+		ch <- systemdInfo{serviceInfo: serviceInfo{activeSince: now.Add(-uptime.UpTime), anyFile: ie.path}, errs: nil}
+	}
+}
+
+func getInitExe(ch chan initExe) {
+	if path, errRL := os.Readlink("/proc/1/exe"); errRL == nil {
+		ch <- initExe{path: path, errs: nil}
+	} else {
+		ch <- initExe{errs: map[string]error{"readlink /proc/1/exe": errRL}}
+	}
 }
 
 func showService(service string, ch chan systemctlShowResult) {

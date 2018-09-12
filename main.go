@@ -148,7 +148,7 @@ func checkSystemdNeedrestart() map[string]error {
 	serviceDeps := map[string]map[string]struct{}{}
 
 	for name, service := range services.services {
-		if packag, hasPackage := packages.nonConfFiles[service.fragmentPath]; hasPackage {
+		if packag, hasPackage := packages.nonConfFiles[service.anyFile]; hasPackage {
 			deps := packages.packages[packag].deps
 			serviceDeps[name] = deps
 
