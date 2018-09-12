@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	linux "github.com/Al2Klimov/go-linux-apis"
-	"os"
 	"regexp"
 	"time"
 )
@@ -103,37 +102,13 @@ func showServices(ch chan servicesInfo) {
 }
 
 func getSystemdInfo(ch chan systemdInfo) {
-	chInitExe := make(chan initExe, 1)
-	getInitExe(chInitExe)
-
-	uptime, errGUT := linux.GetUptime()
-	now := time.Now()
-	ie := <-chInitExe
-
-	errs := map[string]error{}
-
-	if ie.errs != nil {
-		for c, e := range ie.errs {
-			errs[c] = e
+	if uptime, errGUT := linux.GetUptime(); errGUT == nil {
+		ch <- systemdInfo{
+			serviceInfo: serviceInfo{activeSince: time.Now().Add(-uptime.UpTime), anyFile: "/sbin/init"},
+			errs:        nil,
 		}
-	}
-
-	if errGUT != nil {
-		errs["cat /proc/uptime"] = errGUT
-	}
-
-	if len(errs) > 0 {
-		ch <- systemdInfo{errs: errs}
 	} else {
-		ch <- systemdInfo{serviceInfo: serviceInfo{activeSince: now.Add(-uptime.UpTime), anyFile: ie.path}, errs: nil}
-	}
-}
-
-func getInitExe(ch chan initExe) {
-	if path, errRL := os.Readlink("/proc/1/exe"); errRL == nil {
-		ch <- initExe{path: path, errs: nil}
-	} else {
-		ch <- initExe{errs: map[string]error{"readlink /proc/1/exe": errRL}}
+		ch <- systemdInfo{errs: map[string]error{"cat /proc/uptime": errGUT}}
 	}
 }
 
