@@ -5,8 +5,8 @@ package main
 import (
 	"fmt"
 	_ "github.com/Al2Klimov/go-gen-source-repos"
+	. "github.com/Al2Klimov/go-monplug-utils"
 	pp "github.com/Al2Klimov/go-pretty-print"
-	"golang.org/x/crypto/ssh/terminal"
 	"html"
 	"math"
 	"os"
@@ -61,6 +61,9 @@ var ignoredFile = regexp.MustCompile(`\A/usr/share/(?:doc|man|locale)/`)
 var toleratedFile = regexp.MustCompile(`\A/(?:dev|etc|run|tmp|var)/`)
 var lineBreak = []byte("\n")
 
+var posInf = math.Inf(1)
+var negInf = math.Inf(-1)
+
 var shortOutput = struct {
 	table [2][]byte
 	tr    [3][]byte
@@ -89,25 +92,18 @@ var longOutput = struct {
 }
 
 func main() {
-	if terminal.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Printf(
-			"For the terms of use, the source code and the authors\nsee the projects this program is assembled from:\n\n  %s\n",
-			strings.Join(GithubcomAl2klimovGo_gen_source_repos, "\n  "),
-		)
-
-		return
-	}
-
-	if errsCSNR := checkSystemdNeedrestart(); errsCSNR != nil {
-		for context, err := range errsCSNR {
-			fmt.Printf("%s: %s\n", context, err.Error())
-		}
-
-		os.Exit(3)
-	}
+	os.Exit(ExecuteCheck(onTerminal, checkSystemdNeedrestart))
 }
 
-func checkSystemdNeedrestart() map[string]error {
+func onTerminal() (output string) {
+	return fmt.Sprintf(
+		"For the terms of use, the source code and the authors\n"+
+			"see the projects this program is assembled from:\n\n  %s\n",
+		strings.Join(GithubcomAl2klimovGo_gen_source_repos, "\n  "),
+	)
+}
+
+func checkSystemdNeedrestart() (output string, perfdata PerfdataCollection, errs map[string]error) {
 	chPackagesInfo := make(chan packagesInfo, 1)
 	chServicesInfo := make(chan servicesInfo, 1)
 
@@ -116,8 +112,6 @@ func checkSystemdNeedrestart() map[string]error {
 
 	packages := <-chPackagesInfo
 	services := <-chServicesInfo
-
-	var errs map[string]error = nil
 
 	if services.errs != nil {
 		errs = services.errs
@@ -134,7 +128,7 @@ func checkSystemdNeedrestart() map[string]error {
 	}
 
 	if errs != nil {
-		return errs
+		return
 	}
 
 	chNonConfFilesScan := make(chan nonConfFilesScan, 64)
@@ -171,8 +165,10 @@ func checkSystemdNeedrestart() map[string]error {
 	}
 
 	if len(errs) > 0 {
-		return errs
+		return
 	}
+
+	errs = nil
 
 	chMTimesDiff := make(chan mTimesDiff, 64)
 
@@ -205,71 +201,60 @@ func checkSystemdNeedrestart() map[string]error {
 		}
 	}
 
-	perfdat := perfdataCollection{
-		perfdata{
-			label: "services_active",
-			value: float64(len(services.services)),
-			min:   optionalNumber{true, 0},
-			max:   optionalNumber{true, float64(services.servicesTotal)},
+	perfdata = PerfdataCollection{
+		Perfdata{
+			Label: "services_active",
+			Value: float64(len(services.services)),
+			Min:   OptionalNumber{true, 0},
+			Max:   OptionalNumber{true, float64(services.servicesTotal)},
 		},
-		perfdata{
-			label: "services_notrestarted",
-			value: float64(len(serviceDiffs)),
-			crit:  optionalThreshold{true, true, 1, posInf},
-			min:   optionalNumber{true, 0},
-			max:   optionalNumber{true, float64(services.servicesTotal)},
+		Perfdata{
+			Label: "services_notrestarted",
+			Value: float64(len(serviceDiffs)),
+			Crit:  OptionalThreshold{true, true, 1, posInf},
+			Min:   OptionalNumber{true, 0},
+			Max:   OptionalNumber{true, float64(services.servicesTotal)},
 		},
-		perfdata{
-			label: "packages_active",
-			value: float64(len(packagesHandled)),
-			min:   optionalNumber{true, 0},
-			max:   optionalNumber{true, float64(len(packages.packages))},
+		Perfdata{
+			Label: "packages_active",
+			Value: float64(len(packagesHandled)),
+			Min:   OptionalNumber{true, 0},
+			Max:   OptionalNumber{true, float64(len(packages.packages))},
 		},
-		perfdata{
-			label: "packages_upgraded",
-			value: float64(len(packagesUpgraded)),
-			crit:  optionalThreshold{true, true, 1, posInf},
-			min:   optionalNumber{true, 0},
-			max:   optionalNumber{true, float64(len(packages.packages))},
+		Perfdata{
+			Label: "packages_upgraded",
+			Value: float64(len(packagesUpgraded)),
+			Crit:  OptionalThreshold{true, true, 1, posInf},
+			Min:   OptionalNumber{true, 0},
+			Max:   OptionalNumber{true, float64(len(packages.packages))},
 		},
-		perfdata{
-			label: "mtime_diff_min",
-			value: mTimeDiffMin / float64(time.Microsecond),
-			uom:   "us",
-			crit:  optionalThreshold{true, true, 0, posInf},
+		Perfdata{
+			Label: "mtime_diff_min",
+			Value: mTimeDiffMin / float64(time.Microsecond),
+			UOM:   "us",
+			Crit:  OptionalThreshold{true, true, 0, posInf},
 		},
-		perfdata{
-			label: "mtime_diff_avg",
-			value: mTimeDiffSum / float64(mTimeDiffCount) / float64(time.Microsecond),
-			uom:   "us",
-			crit:  optionalThreshold{true, true, 0, posInf},
+		Perfdata{
+			Label: "mtime_diff_avg",
+			Value: mTimeDiffSum / float64(mTimeDiffCount) / float64(time.Microsecond),
+			UOM:   "us",
+			Crit:  OptionalThreshold{true, true, 0, posInf},
 		},
-		perfdata{
-			label: "mtime_diff_max",
-			value: mTimeDiffMax / float64(time.Microsecond),
-			uom:   "us",
-			crit:  optionalThreshold{true, true, 0, posInf},
+		Perfdata{
+			Label: "mtime_diff_max",
+			Value: mTimeDiffMax / float64(time.Microsecond),
+			UOM:   "us",
+			Crit:  OptionalThreshold{true, true, 0, posInf},
 		},
 	}
 
-	var status int
-	var output string
-
 	if len(serviceDiffs) > 0 {
-		status = 2
 		output = assembleCriticalOutput(orderCriticalOutput(serviceDiffs))
 	} else {
-		status = 0
 		output = "<p>No service has not been restarted since some of its parts have been upgraded.</p>"
 	}
 
-	if _, errFP := fmt.Print(output + perfdat.String()); errFP != nil {
-		status = 3
-	}
-
-	os.Exit(status)
-
-	return nil
+	return
 }
 
 func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan nonConfFilesScan) {
