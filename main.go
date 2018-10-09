@@ -1,4 +1,4 @@
-//go:generate go run $GOPATH/src/github.com/Al2Klimov/go-gen-source-repos/main.go github.com/Al2Klimov/check_systemd_needrestart
+//go:generate go run vendor/github.com/Al2Klimov/go-gen-source-repos/main.go github.com/Al2Klimov/check_systemd_needrestart
 
 package main
 
