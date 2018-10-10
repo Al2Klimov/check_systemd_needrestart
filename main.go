@@ -185,17 +185,18 @@ func checkSystemdNeedrestart() (output string, perfdata PerfdataCollection, errs
 
 	for pending := len(serviceDeps); pending > 0; pending-- {
 		if diffs := <-chMTimesDiff; len(diffs.diffs) > 0 {
-			serviceDiffs[diffs.service] = diffs.diffs
-
 			for packag, files := range diffs.diffs {
-				packagesUpgraded[packag] = struct{}{}
-
 				for _, diff := range files {
 					fDiff := float64(diff)
 					mTimeDiffMin = math.Min(mTimeDiffMin, fDiff)
 					mTimeDiffMax = math.Max(mTimeDiffMax, fDiff)
 					mTimeDiffSum += fDiff
 					mTimeDiffCount++
+
+					if fDiff >= 0.0 {
+						serviceDiffs[diffs.service] = diffs.diffs
+						packagesUpgraded[packag] = struct{}{}
+					}
 				}
 			}
 		}
@@ -286,12 +287,12 @@ func diffMTimes(service string, activeSince time.Time, deps map[string]struct{},
 	for dep := range deps {
 		for file := range packages[dep].nonConfFiles {
 			if mTime, hasMTime := mTimes[file]; hasMTime {
-				if diff := mTime.Sub(activeSince); diff >= time.Duration(0) {
-					if depDiffs, hasDep := diffs[dep]; hasDep {
-						depDiffs[file] = diff
-					} else {
-						diffs[dep] = map[string]time.Duration{file: diff}
-					}
+				diff := mTime.Sub(activeSince)
+
+				if depDiffs, hasDep := diffs[dep]; hasDep {
+					depDiffs[file] = diff
+				} else {
+					diffs[dep] = map[string]time.Duration{file: diff}
 				}
 			}
 		}
