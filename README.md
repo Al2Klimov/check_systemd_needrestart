@@ -7,6 +7,11 @@ due to updated software packages.
 To check whether a non-container host should be rebooted,
 use this plugin together with [check_linux_newkernel].
 
+## Demonstration
+
+1. `$ docker run -itp 8080:80 grandmaster/check_systemd_needrestart`
+2. Open http://localhost:8080 and navigate to the (only) service
+
 ## Usage
 
 The [plug-and-play Linux binaries]
