@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	. "github.com/Al2Klimov/go-exec-utils"
 	"regexp"
 	"strings"
 )
@@ -20,9 +21,11 @@ var anyWord = regexp.MustCompile(`\S+`)
 var commaSpace = []byte(", ")
 
 func dpkgShowPackages() (packagesInfo, map[string]error) {
-	cmd, rawPackages, errDQ := system(
-		"dpkg-query", "-W",
-		"-f", `Package=${Package}
+	cmd, rawPackages, errDQ := System(
+		"dpkg-query",
+		[]string{
+			"-W",
+			"-f", `Package=${Package}
 Architecture=${Architecture}
 Status=${Status}
 Depends=${Depends}
@@ -32,7 +35,10 @@ Replaces=${Replaces}
 Conffiles>
 ${Conffiles}
 `,
-		"*",
+			"*",
+		},
+		map[string]string{"LC_ALL": "C"},
+		"/",
 	)
 	if errDQ != nil {
 		return packagesInfo{}, map[string]error{cmd: errDQ}
@@ -147,7 +153,7 @@ func dpkgShowPackage(attrs map[string][][]byte, ch chan dpkgShowPackageResult) {
 
 	packag := dpkgExtractStringAttr(attrs, "Package") + ":" + arch
 
-	cmd, rawFiles, errDL := system("dpkg", "-L", packag)
+	cmd, rawFiles, errDL := System("dpkg", []string{"-L", packag}, map[string]string{"LC_ALL": "C"}, "/")
 	if errDL != nil {
 		<-chEffectiveDeps
 		<-chEffectiveAliases

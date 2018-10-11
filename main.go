@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	. "github.com/Al2Klimov/go-exec-utils"
 	_ "github.com/Al2Klimov/go-gen-source-repos"
 	. "github.com/Al2Klimov/go-monplug-utils"
 	pp "github.com/Al2Klimov/go-pretty-print"
@@ -269,7 +270,7 @@ func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan nonConfFilesScan
 					mTimes[file] = info.ModTime()
 				}
 			} else if !(os.IsNotExist(errStat) || (os.IsPermission(errStat) && toleratedFile.MatchString(file))) {
-				errs[formatCmd("stat", file)] = errStat
+				errs[FormatCmd("stat", []string{file}, nil)] = errStat
 			}
 		}
 	}

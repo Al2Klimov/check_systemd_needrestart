@@ -3,6 +3,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:8075f4fab3390b887922d983c8fe9c869468faf265bea929c50ae11e7144d770"
+  name = "github.com/Al2Klimov/go-exec-utils"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "23373778e8123158cdcecce94531e924e0bc4e94"
+
+[[projects]]
+  branch = "master"
   digest = "1:23f6ffccb3e18e44df23d4e9d5139ed6d5be0cec9f0e0d452484c2e562108116"
   name = "github.com/Al2Klimov/go-gen-source-repos"
   packages = ["."]
@@ -39,7 +47,7 @@
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
   pruneopts = "UT"
-  revision = "0e37d006457bf46f9e6692014ba72ef82c33022c"
+  revision = "a92615f3c49003920a58dedcf32cf55022cefb8d"
 
 [[projects]]
   branch = "master"
@@ -47,7 +55,7 @@
   name = "golang.org/x/net"
   packages = ["context"]
   pruneopts = "UT"
-  revision = "2f5d2388922f370f4355f327fcf4cfe9f5583908"
+  revision = "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 
 [[projects]]
   branch = "master"
@@ -59,24 +67,24 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:75cb7164c3c9e028922e69b10842159549ab96ffc4800ea189c4a6865dc3bc08"
+  digest = "1:f5aa274a0377f85735edc7fedfb0811d3cbc20af91633797cb359e29c3272271"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "90868a75fefd03942536221d7c0e2f84ec62a668"
+  revision = "fa43e7bc11baaae89f3f902b2b4d832b68234844"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/Al2Klimov/go-exec-utils",
     "github.com/Al2Klimov/go-gen-source-repos",
     "github.com/Al2Klimov/go-linux-apis",
     "github.com/Al2Klimov/go-monplug-utils",
     "github.com/Al2Klimov/go-pretty-print",
-    "golang.org/x/sync/semaphore",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -27,6 +27,10 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/Al2Klimov/go-exec-utils"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/Al2Klimov/go-gen-source-repos"
 
 [[constraint]]
@@ -40,10 +44,6 @@
 [[constraint]]
   branch = "master"
   name = "github.com/Al2Klimov/go-pretty-print"
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/sync"
 
 [prune]
   go-tests = true

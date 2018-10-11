@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	. "github.com/Al2Klimov/go-exec-utils"
 	linux "github.com/Al2Klimov/go-linux-apis"
 	"regexp"
 	"time"
@@ -40,7 +41,7 @@ var serviceUnit = regexp.MustCompile(`\A(.+)\.service\z`)
 var serviceProperty = regexp.MustCompile(`\A([^=]+)=(.*)\z`)
 
 func showServices(ch chan servicesInfo) {
-	cmd, unitFiles, errLUF := system("systemctl", "list-units")
+	cmd, unitFiles, errLUF := System("systemctl", []string{"list-units"}, map[string]string{"LC_ALL": "C"}, "/")
 	if errLUF != nil {
 		ch <- servicesInfo{errs: map[string]error{cmd: errLUF}}
 		return
@@ -113,13 +114,17 @@ func getSystemdInfo(ch chan systemdInfo) {
 }
 
 func showService(service string, ch chan systemctlShowResult) {
-	cmd, rawProperties, errSSS := system(
-		"systemctl", "show",
-		"-p", "ActiveState",
-		"-p", "SubState",
-		"-p", "ExecMainStartTimestamp",
-		"-p", "FragmentPath",
-		service+".service",
+	cmd, rawProperties, errSSS := System(
+		"systemctl", []string{
+			"show",
+			"-p", "ActiveState",
+			"-p", "SubState",
+			"-p", "ExecMainStartTimestamp",
+			"-p", "FragmentPath",
+			service + ".service",
+		},
+		map[string]string{"LC_ALL": "C"},
+		"/",
 	)
 	if errSSS != nil {
 		ch <- systemctlShowResult{cmd: cmd, err: errSSS}
