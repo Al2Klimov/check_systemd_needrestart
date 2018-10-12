@@ -62,7 +62,7 @@ your monitoring tool runs on for any services to be restarted.
 #### Icinga 2
 
 This repository ships the [check command definition]
-as well as a [service template] for [Icinga 2].
+as well as a [service template] and [host example] for [Icinga 2].
 
 The service definition will work in both correctly set up [Icinga 2 clusters]
 and Icinga 2 instances not being part of any cluster
@@ -73,6 +73,7 @@ as long as the [hosts] are named after the [endpoints].
 [Nagio$ check plugin API]: https://nagios-plugins.org/doc/guidelines.html#AEN78
 [check command definition]: ./icinga2/check_systemd_needrestart.conf
 [service template]: ./icinga2/check_systemd_needrestart-service.conf
+[host example]: ./icinga2/check_systemd_needrestart-host.conf
 [Icinga 2]: https://www.icinga.com/docs/icinga2/latest/doc/01-about/
 [Icinga 2 clusters]: https://www.icinga.com/docs/icinga2/latest/doc/06-distributed-monitoring/
 [hosts]: https://www.icinga.com/docs/icinga2/latest/doc/09-object-types/#host
