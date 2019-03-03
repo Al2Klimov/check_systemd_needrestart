@@ -84,9 +84,8 @@ var longOutput = struct {
 	tr    [3][]byte
 }{
 	h1: [2][]byte{[]byte("<p><b>Service: "), []byte("</b></p>")},
-	h2: [2][]byte{[]byte("<p>Package: "), []byte("</p>")},
 	table: [2][]byte{
-		[]byte("<table><thead><tr><th>File</th><th>MTime - service start</th></tr></thead><tbody>"),
+		[]byte("<table><thead><tr><th>Package</th><th>Upgrade - service start</th></tr></thead><tbody>"),
 		[]byte("</tbody></table>"),
 	},
 	tr: [3][]byte{[]byte("<tr><td>"), []byte("</td><td>"), []byte("</td></tr>")},
@@ -404,23 +403,17 @@ func assembleCriticalOutput(services []orderedService) string {
 		builder.Write(longOutput.h1[0])
 		builder.Write([]byte(html.EscapeString(service.name)))
 		builder.Write(longOutput.h1[1])
+		builder.Write(longOutput.table[0])
 
 		for _, packag := range service.packages {
-			builder.Write(longOutput.h2[0])
+			builder.Write(longOutput.tr[0])
 			builder.Write([]byte(html.EscapeString(packag.name)))
-			builder.Write(longOutput.h2[1])
-			builder.Write(longOutput.table[0])
-
-			for _, file := range packag.files {
-				builder.Write(longOutput.tr[0])
-				builder.Write([]byte(html.EscapeString(file.path)))
-				builder.Write(longOutput.tr[1])
-				builder.Write([]byte(html.EscapeString(pp.Duration(file.diff).String())))
-				builder.Write(longOutput.tr[2])
-			}
-
-			builder.Write(longOutput.table[1])
+			builder.Write(longOutput.tr[1])
+			builder.Write([]byte(html.EscapeString(pp.Duration(packag.files[0].diff).String())))
+			builder.Write(longOutput.tr[2])
 		}
+
+		builder.Write(longOutput.table[1])
 	}
 
 	return builder.String()
