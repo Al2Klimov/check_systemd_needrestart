@@ -2,7 +2,7 @@ package main
 
 import "sync/atomic"
 
-func showPackages(ch chan packagesInfo) {
+func showPackages(ch chan<- packagesInfo) {
 	packages, errs := dpkgShowPackages()
 	if errs != nil {
 		ch <- packagesInfo{errs: errs}
@@ -138,7 +138,7 @@ func showPackages(ch chan packagesInfo) {
 	ch <- packages
 }
 
-func unaliasDeps(deps map[string]struct{}, aliases map[string]map[string]struct{}, pending *uint64, chDone chan struct{}) {
+func unaliasDeps(deps map[string]struct{}, aliases map[string]map[string]struct{}, pending *uint64, chDone chan<- struct{}) {
 	newDeps := map[string]struct{}{}
 
 	for dep := range deps {
@@ -160,7 +160,7 @@ func unaliasDeps(deps map[string]struct{}, aliases map[string]map[string]struct{
 	}
 }
 
-func compressDeps(deps map[string]struct{}, packages map[string]packageInfo, pending *uint64, chDone chan struct{}) {
+func compressDeps(deps map[string]struct{}, packages map[string]packageInfo, pending *uint64, chDone chan<- struct{}) {
 	oldDeps := map[string]struct{}{}
 
 	for dep := range deps {

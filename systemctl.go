@@ -40,7 +40,7 @@ type systemctlShowResult struct {
 var serviceUnit = regexp.MustCompile(`\A(.+)\.service\z`)
 var serviceProperty = regexp.MustCompile(`\A([^=]+)=(.*)\z`)
 
-func showServices(ch chan servicesInfo) {
+func showServices(ch chan<- servicesInfo) {
 	cmd, unitFiles, errLUF := System("systemctl", []string{"list-units"}, map[string]string{"LC_ALL": "C"}, "/")
 	if errLUF != nil {
 		ch <- servicesInfo{errs: map[string]error{cmd: errLUF}}
@@ -102,7 +102,7 @@ func showServices(ch chan servicesInfo) {
 	ch <- servicesInfo{services: services, servicesTotal: servicesTotal, errs: nil}
 }
 
-func getSystemdInfo(ch chan systemdInfo) {
+func getSystemdInfo(ch chan<- systemdInfo) {
 	if uptime, errGUT := linux.GetUptime(); errGUT == nil {
 		ch <- systemdInfo{
 			serviceInfo: serviceInfo{activeSince: time.Now().Add(-uptime.UpTime), anyFile: "/sbin/init"},
@@ -113,7 +113,7 @@ func getSystemdInfo(ch chan systemdInfo) {
 	}
 }
 
-func showService(service string, ch chan systemctlShowResult) {
+func showService(service string, ch chan<- systemctlShowResult) {
 	cmd, rawProperties, errSSS := System(
 		"systemctl", []string{
 			"show",

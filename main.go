@@ -258,7 +258,7 @@ func checkSystemdNeedrestart() (output string, perfdata PerfdataCollection, errs
 	return
 }
 
-func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan nonConfFilesScan) {
+func scanNonConfFiles(nonConfFiles map[string]struct{}, ch chan<- nonConfFilesScan) {
 	mTimes := map[string]time.Time{}
 	errs := map[string]error{}
 

@@ -142,7 +142,7 @@ func dpkgParseStatus(status [][]byte) (result map[string]struct{}) {
 	return
 }
 
-func dpkgShowPackage(attrs map[string][][]byte, ch chan dpkgShowPackageResult) {
+func dpkgShowPackage(attrs map[string][][]byte, ch chan<- dpkgShowPackageResult) {
 	arch := dpkgExtractStringAttr(attrs, "Architecture")
 
 	chEffectiveDeps := make(chan map[string]struct{}, 1)
@@ -194,7 +194,7 @@ func dpkgExtractStringAttr(attrs map[string][][]byte, attr string) string {
 	return ""
 }
 
-func dpkgParsePackagesLists(ch chan map[string]struct{}, lists [2][][]byte, archs []string) {
+func dpkgParsePackagesLists(ch chan<- map[string]struct{}, lists [2][][]byte, archs []string) {
 	result := map[string]struct{}{}
 
 	for _, list := range lists {
