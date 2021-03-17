@@ -11,4 +11,5 @@ require (
 	github.com/Al2Klimov/go-test-utils v0.0.0-20181021140159-44f0ba1d3916 // indirect
 	golang.org/x/crypto v0.0.0-20191122220453-ac88ee75c92c // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/sys v0.0.0-20210317091845-390168757d9c // indirect
 )
